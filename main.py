@@ -3,6 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 from operation import MathService
 from fromStr import large_num
+from datetime import datetime
 
 intent = discord.Intents.all()
 intent.message_content = True
@@ -292,6 +293,26 @@ async def help(interaction: discord.Interaction):
         value="Pow value1^value2",
         inline=True
     )
+    embed.add_field(
+        name="dm_disable",
+        value="Disables DM",
+        inline=True
+    )
+    embed.add_field(
+        name="dm_enable",
+        value="Enables DM",
+        inline=True
+    )
+    embed.add_field(
+        name="dm",
+        value="Dm's the person from the Server",
+        inline=True
+    )
+    embed.add_field(
+        name="post",
+        value="Select from general, lua, bug_reports",
+        inline=True
+    )
     await interaction.response.send_message(embed=embed)
 
 async def send_help(interaction: discord.Interaction):
@@ -365,4 +386,75 @@ async def post(interaction: discord.Interaction):
     except discord.Forbidden:
         await interaction.response.send_message('I cannot send you a DM. Please ensure your DMs are open.', ephemeral=True)
 
-NumberFormat.run()
+@NumberFormat.tree.command(name="dm", description="Send a direct message to a member.")
+@app_commands.describe(member="The member to DM", message="The message to send")
+async def dm(interaction: discord.Interaction, member: discord.Member, message: str):
+    global dm_command_enabled
+
+    if not dm_command_enabled:
+        await interaction.response.send_message('DMs are currently disabled.', ephemeral=True)
+        return
+
+    try:
+        if member.dm_channel is None:
+            await member.create_dm()
+
+        local = datetime.now()
+        formatted_time = local.strftime('%m/%d/%Y %I:%M:%S %p')
+
+        embed = discord.Embed(
+            title="Its Yeeeee Boi Slim Shady",
+            description=message,
+            color=discord.Color.blue()
+        )
+        embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.avatar.url)
+        embed.set_footer(text=f"Sent at {formatted_time}")
+
+        await member.dm_channel.send(embed=embed)
+        await interaction.response.send_message(f"Successfully sent a DM to {member.display_name}.", ephemeral=True)
+
+    except discord.Forbidden:
+        await interaction.response.send_message(f"Could not send DM to {member.display_name}. They might have DMs disabled.", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"An error occurred: {str(e)}", ephemeral=True)
+
+@NumberFormat.tree.command(name="dm_disable", description="Disable the /dm command.")
+async def dm_disable(interaction: discord.Interaction):
+    global dm_command_enabled
+    guild = interaction.guild
+    role_disabled = discord.utils.get(guild.roles, name="DM_Disabled")
+    role_enabled = discord.utils.get(guild.roles, name="DM_Enable")
+    if role_enabled:
+        await interaction.user.remove_roles(role_enabled)
+    if role_disabled:
+        await interaction.user.add_roles(role_disabled)
+    dm_command_enabled = False
+
+    await interaction.response.send_message('The /dm command has been disabled.')
+
+@NumberFormat.tree.command(name="dm_enable", description="Enable the /dm command.")
+async def dm_enable(interaction: discord.Interaction):
+    global dm_command_enabled
+    guild = interaction.guild
+
+    role_enabled = discord.utils.get(guild.roles, name="DM_Enable")
+    role_disabled = discord.utils.get(guild.roles, name="DM_Disabled")
+    if role_disabled:
+        try:
+            await interaction.user.remove_roles(role_disabled)
+        except discord.Forbidden:
+            await interaction.response.send_message('I do not have permission to remove the "DM_Disabled" role.', ephemeral=True)
+            return
+
+    if role_enabled:
+        try:
+            await interaction.user.add_roles(role_enabled)
+        except discord.Forbidden:
+            await interaction.response.send_message('I do not have permission to add the "DM_Enabled" role.', ephemeral=True)
+            return
+
+    dm_command_enabled = True
+
+    await interaction.response.send_message('The /dm command has been enabled.')
+
+NumberFormat.run('Your Bot Token')
